@@ -14,10 +14,12 @@ from pomsMagnets import vmag as vmagClass
 #from pythonVNAFMR.rasorMagnets import rasorMagnets
 #from pythonVNAFMR.rasorTemperature import rasorTemperature
 
+from ls340Temperature import ls340Temperature
 
 
 """ temperature configuration """
 #rasorTemp = rasorTemperature()
+pomsTemp = ls340Temperature()
 
 """ field configuration """
 #vmag = vmagClass("172.23.240.102", 4042) 				# POMS raspberry in the lab
