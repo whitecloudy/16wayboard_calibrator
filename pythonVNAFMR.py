@@ -2,6 +2,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import h5py
+import os
+
+
+
+
+from rohdeSchwarz_zvb20 import zvb20
+#from pythonVNAFMR.anritsu import anritsu
+
+from pomsMagnets import vmag as vmagClass
+#from pythonVNAFMR.rasorMagnets import rasorMagnets
+#from pythonVNAFMR.rasorTemperature import rasorTemperature
+
+
+
+""" temperature configuration """
+#rasorTemp = rasorTemperature()
+
+""" field configuration """
+#vmag = vmagClass("172.23.240.102", 4042) 				# POMS raspberry in the lab
+vmag = vmagClass("172.23.110.103", 4042) 				# POMS raspberry in i10
+#mag = rasorMagnets(a=28.58, t=9.06, y0=3.66)		# RASOR medium magnets
+#mag = rasorMagnets(a=177.0, t=8.16, y0=18.1)		# RASOR big magnets
+
+
+""" vna configuation """
+vna = zvb20("TCPIP::192.168.0.3::INSTR")
 
 
 directory = ""
@@ -10,7 +36,9 @@ directory = ""
 def setDirectory(newDirectory):
     global directory
     directory = newDirectory
-    #open('./filePath.dat', 'w').write(directory) 
+    if not os.path.exists(directory):
+        print "Directory doesn't exist -> creating %s" % directory
+        os.makedirs(directory)
 
 
 def dummyScan():
@@ -27,9 +55,9 @@ def scan(axis, start, stop, step, vna, reference=None):
 	else:
 		positions = np.arange(start, (stop-0.1), step)			# 0.1 extra so stop is included		
 			
-	count = np.loadtxt("./scanCounter.dat", dtype="d")
+	count = np.loadtxt("C:\\Users/poms/Documents/scanCounter.dat", dtype="d")
 	count = count + 1
-	np.savetxt("./scanCounter.dat", [count], fmt="%06d")
+	np.savetxt("C:\\Users/poms/Documents/scanCounter.dat", [count], fmt="%06d")
 	
 	#path = open('./filePath.dat', 'r').read()
 	print "Starting scan %s #%06d" % (directory, count)

@@ -35,11 +35,11 @@ class vmag():
 	
 	def moveTo(self, field):
 		if (field < 0.0) and self.positiveField:
-			print "change field direction"
+			#print "change field direction"
 			self.positiveField = False
 			self.setFieldAngleRaw(-self.theta, (self.phi+180)%360)
 		if (field > 0.0) and not self.positiveField:
-			print "change field direction back"
+			#print "change field direction back"
 			self.positiveField = True
 			self.setFieldAngleRaw(self.theta, self.phi)
 			
