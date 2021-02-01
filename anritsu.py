@@ -2,6 +2,8 @@
 class file for ANRITSU MS46122A VNA
 
 David Burn
+
+Edit : Whitecloudy
 """
 
 
@@ -14,9 +16,9 @@ class anritsu():
 	def __init__(self, host):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect((host, 5001))
-		print "socket setup"
+		print("socket setup")
 		self.sock.send(str.encode("*IDN?\n"))
-		print self.sock.recv(2056)
+		print(self.sock.recv(2056))
 
 
 		self.bandwidth = None
@@ -35,6 +37,7 @@ class anritsu():
 		""" display layout settings """
 		self.write("CALCulate1:PARameter1:DEFine S11")
 		self.write("CALCulate1:PARameter1:FORMat MLOGarithmic")
+		
 
 		self.write("CALCulate1:PARameter2:DEFine S21")
 		self.write("CALCulate1:PARameter2:FORMat MLOGarithmic")
@@ -50,12 +53,13 @@ class anritsu():
 		""" data transfer settings """
 		self.write(":FORMat:DATA REAL")				# ASC, REAL or REAL32
 		self.write(":FORMat:BORDer SWAP")			# MSB/LSB: Normal or Swapped
-
-
 		
-		self.setFrequency(0.1,8)
-		self.setNumPoints(2048)
-		self.setBandwidth(700) 
+		self.setFrequency(0.900,0.910)
+		self.setNumPoints(10)
+		self.setBandwidth(40000) 
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+
+
 
 
 	def getData(self):
@@ -63,7 +67,7 @@ class anritsu():
 		s21 = self.getTrace(2)	#S21
 		s22 = self.getTrace(3)	#S22
 		s12 = self.getTrace(4)	#S12
-		return [s12,s21,s11,s22]
+		return [s11,s21,s22,s12]
 
  
 
@@ -71,37 +75,39 @@ class anritsu():
 
 	def getTrace(self, par):
 		# floating point with 8 bytes / 64 bits per number
-		#self.write("SYST:ERR:CLE")
-		#print self.query("*OPC?")
+		self.write("SYST:ERR:CLE")
+		self.query("*OPC?")
 
-		#print self.query("SYST:ERR?")				#returns "No Error"
+		print(self.query("SYST:ERR?"))				#returns "No Error"
 
-		self.write(":CALC:PAR%1d:DATA:SDAT?" % par)
-		#self.write(":CALC:DATA:SDAT?")	#works
+		self.sock.send(str.encode("CALC1:PAR%1d:SEL\n" % par))
+		print(self.query("CALC1:PAR:SEL?").decode("utf-8"))
+		self.query("*OPC?")
+
+		self.write(":CALC1:DATA:SDAT?")	#works
+
 		head =  self.sock.recv(2)				# header part 1
-		head =  self.sock.recv(int(head[1]))			# header part 2
+		head = head.decode("utf-8")
+		head =  self.sock.recv(int(head[1]))	# header part 2
 		MSGLEN = int(head)			# extrace message len from header
-
 		chunks = []
 		bytes_recd = 0
 		while bytes_recd < MSGLEN:
 			chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
 			chunks.append(chunk)
 			bytes_recd = bytes_recd + len(chunk)
-		data = ''.join(chunks)
+		data = b''.join(chunks)
 
 		extra = self.sock.recv(2048)
-		#print len(extra)
-		#print chr(extra)
+		#print(len(extra))
+		#print(chr(extra))
 
 		#print len(data), " bytes, ", len(data)/8, " numbers"
 
 		num = len(data) / 8
 		[data,] = struct.unpack('%dd' % num, data),
 		
-		#return [np.array(data[::2]), np.array(data[1::2]) ]
-
-		return  np.array(data[::2])   + np.array(data[1::2])*1j
+		return  complex(np.array(data[::2])   + np.array(data[1::2])*1j)
 
 
 
@@ -119,7 +125,7 @@ class anritsu():
 			chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
 			chunks.append(chunk)
 			bytes_recd = bytes_recd + len(chunk)
-		data = ''.join(chunks)
+		data = b''.join(chunks)
 
 		#print len(data), " bytes, ", len(data)/8, " numbers"
 
@@ -133,12 +139,12 @@ class anritsu():
 	def doSweep(self):
 		self.write("SYST:ERR:CLE")
 		opc = self.query("*OPC?")
-		print "opc ", opc
+		print("opc ", opc)
 
 		self.write("TRIG:SING")
 		# there is a wait here until anritsu has finished collecting
 		err = self.query("SYST:ERR?")
-		print "err ", err
+		print("err ", err)
 
 
 
