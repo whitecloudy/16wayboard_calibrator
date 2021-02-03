@@ -13,7 +13,7 @@ import numpy as np
 
 
 class anritsu():
-	def __init__(self, host):
+	def __init__(self, host, freq_start=0.1, freq_stop=8, point=2048):
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect((host, 5001))
 		print("socket setup")
@@ -22,18 +22,18 @@ class anritsu():
 
 
 		self.bandwidth = None
-		self.setup()
+		self.setup(freq_start, freq_stop, point)
 
 
 	def query(self, message):
 		self.sock.send(str.encode(message+"\n"))
-		return self.sock.recv(2056)
+		return self.recvAnswer()
 
 	def write(self, message):
 		self.sock.send(str.encode(message+"\n"))
 
 
-	def setup(self):
+	def setup(self, freq_start, freq_stop, point):
 		""" display layout settings """
 		self.write("CALCulate1:PARameter1:DEFine S11")
 		self.write("CALCulate1:PARameter1:FORMat MLOGarithmic")
@@ -54,8 +54,8 @@ class anritsu():
 		self.write(":FORMat:DATA REAL")				# ASC, REAL or REAL32
 		self.write(":FORMat:BORDer SWAP")			# MSB/LSB: Normal or Swapped
 		
-		self.setFrequency(0.900,0.910)
-		self.setNumPoints(10)
+		self.setFrequency(freq_start, freq_stop)
+		self.setNumPoints(point)
 		self.setBandwidth(40000) 
 		print(self.query("SYST:ERR?"))				#returns "No Error"
 
@@ -86,28 +86,13 @@ class anritsu():
 
 		self.write(":CALC1:DATA:SDAT?")	#works
 
-		head =  self.sock.recv(2)				# header part 1
-		head = head.decode("utf-8")
-		head =  self.sock.recv(int(head[1]))	# header part 2
-		MSGLEN = int(head)			# extrace message len from header
-		chunks = []
-		bytes_recd = 0
-		while bytes_recd < MSGLEN:
-			chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
-			chunks.append(chunk)
-			bytes_recd = bytes_recd + len(chunk)
-		data = b''.join(chunks)
-
-		extra = self.sock.recv(2048)
-		#print(len(extra))
-		#print(chr(extra))
-
-		#print len(data), " bytes, ", len(data)/8, " numbers"
+		data = self.recvData()
 
 		num = len(data) / 8
 		[data,] = struct.unpack('%dd' % num, data),
 		
-		return  complex(np.array(data[::2])   + np.array(data[1::2])*1j)
+		return  np.array(data[::2])   + np.array(data[1::2])*1j
+
 
 
 
@@ -115,25 +100,57 @@ class anritsu():
 		self.write("SYST:ERR:CLE")
 
 		self.write(":SENSe:FREQuency:DATA?")
-		head =  self.sock.recv(2)				# header part 1
-		head =  self.sock.recv(int(head[1]))			# header part 2
-		MSGLEN = int(head)			# extrace message len from header
-
-		chunks = []
-		bytes_recd = 0
-		while bytes_recd < MSGLEN:
-			chunk = self.sock.recv(min(MSGLEN - bytes_recd, 2048))
-			chunks.append(chunk)
-			bytes_recd = bytes_recd + len(chunk)
-		data = b''.join(chunks)
-
-		#print len(data), " bytes, ", len(data)/8, " numbers"
-
-		extra = self.sock.recv(2048)
+		
+		data = self.recvData()
 
 		num = len(data) / 8
 		[data,] = struct.unpack('%dd' % num, data),
 		return np.array(data)/1e9
+
+
+
+
+	def recvAnswer(self):
+		chunk = b''
+		while True:
+			chunk += self.sock.recv(2056)
+			if chunk[-1:].decode("utf-8") == '\n' :
+				break
+
+		return chunk
+
+
+
+	def recvData(self):
+		MSGLEN = 0
+
+		head = ''
+		# header part 1
+		while len(head) < 2:
+			head += self.sock.recv(2 - len(head)).decode("utf-8")				
+
+		if head[0] != '#':
+			raise ValueError('First byte must be # : Actual Value = '+head[0])
+		else:
+			MSGLEN = int(head[1])
+
+		head = b''
+		# header part 2
+		while len(head) < MSGLEN:				
+			head += self.sock.recv(MSGLEN - len(head))			
+		
+		MSGLEN = int(head) 		# extrace message len from header
+
+		# get actual data
+		datas = b''
+		while len(datas) < MSGLEN:
+			datas += self.sock.recv(min(MSGLEN - len(datas), 2048))
+
+		extra = self.recvAnswer()
+
+		return datas
+
+
 
 
 	def doSweep(self):
@@ -161,8 +178,61 @@ class anritsu():
 		self.bandwidth = bandwidth
 		self.write("SENS:BAND %6d" % bandwidth)				# IFBW Frequency (Hz)
 
+
+
 	def setNumPoints(self,num):
-		self.write("SENS:SWEEP:POINT %4d" % num)		
+		self.write("SENS:SWEEP:POINT %4d" % max(2, num))	# Minimum number of point is 2
+
+
+
+	def doCalibration(self):
+		print("[PORT1]")
+		print("\tSHORT")
+		input("\tConnect SHORT and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT1:SHORt")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print("\tOPEN")
+		input("\tConnect OPEN and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT1:OPEN")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print("\tLOAD")
+		input("\tConnect LOAD and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT1:LOAD")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+
+		print("[PORT2]")
+		print("\tSHORT")
+		input("\tConnect SHORT and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT2:SHORt")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print("\tOPEN")
+		input("\tConnect OPEN and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT2:OPEN")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print("\tLOAD")
+		input("\tConnect LOAD and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT2:LOAD")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+		
+		print("[PORT12]")
+		print("\tTHRU")
+		input("\tConnect THRU and Press Enter")
+		input("\tAre you sure to proceed?")
+		self.write("SENS:CORR:COLL:PORT12:THRU")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+		
+		print("<Calibration Complete>")
+		self.write(":SENSe:CORRection:COLLect:SAVE")
+		print(self.query("SYST:ERR?"))				#returns "No Error"
+
+
+
 
 
 
