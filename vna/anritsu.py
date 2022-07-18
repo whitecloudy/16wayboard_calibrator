@@ -10,6 +10,7 @@ Edit : Whitecloudy
 import socket
 import struct
 import numpy as np
+from time import sleep
 
 
 class anritsu():
@@ -35,20 +36,19 @@ class anritsu():
 
 	def setup(self, freq_start, freq_stop, point):
 		""" display layout settings """
-		self.write("CALCulate1:PARameter1:DEFine S11")
-		self.write("CALCulate1:PARameter1:FORMat MLOGarithmic")
-		
+		self.write(":CALCulate1:PARameter1:DEFine S11")
+		self.write(":CALCulate1:PARameter1:FORMat MLOGarithmic")
 
-		self.write("CALCulate1:PARameter2:DEFine S21")
-		self.write("CALCulate1:PARameter2:FORMat MLOGarithmic")
+		self.write(":CALCulate1:PARameter2:DEFine S21")
+		self.write(":CALCulate1:PARameter2:FORMat MLOGarithmic")
 
-		self.write("CALCulate1:PARameter3:DEFine S22")
-		self.write("CALCulate1:PARameter3:FORMat MLOGarithmic")
+		self.write(":CALCulate1:PARameter3:DEFine S22")
+		self.write(":CALCulate1:PARameter3:FORMat MLOGarithmic")
 
-		self.write("CALCulate1:PARameter4:DEFine S12")
-		self.write("CALCulate1:PARameter4:FORMat MLOGarithmic")
+		self.write(":CALCulate1:PARameter4:DEFine S12")
+		self.write(":CALCulate1:PARameter4:FORMat MLOGarithmic")
 
-		self.write("SENSe:HOLD:FUNCtion HOLD")		# single sweep and hold
+		self.write(":SENSe:HOLD:FUNCtion HOLD")		# single sweep and hold
 
 		""" data transfer settings """
 		self.write(":FORMat:DATA REAL")				# ASC, REAL or REAL32
@@ -57,7 +57,7 @@ class anritsu():
 		self.setFrequency(freq_start, freq_stop)
 		self.setNumPoints(point)
 		self.setBandwidth(40000) 
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 
 
 
@@ -75,13 +75,14 @@ class anritsu():
 
 	def getTrace(self, par):
 		# floating point with 8 bytes / 64 bits per number
-		self.write("SYST:ERR:CLE")
-		self.query("*OPC?")
+		self.write(":SYST:ERR:CLE")
+		opc = self.query("*OPC?")
+		print(opc)
 
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 
-		self.sock.send(str.encode("CALC1:PAR%1d:SEL\n" % par))
-		print(self.query("CALC1:PAR:SEL?").decode("utf-8"))
+		self.sock.send(str.encode(":CALC1:PAR%1d:SEL\n" % par))
+		print(self.query(":CALC1:PAR:SEL?").decode("utf-8"))
 		self.query("*OPC?")
 
 		self.write(":CALC1:DATA:SDAT?")	#works
@@ -154,13 +155,16 @@ class anritsu():
 
 
 	def doSweep(self):
-		self.write("SYST:ERR:CLE")
+		self.write(":SYST:ERR:CLE")
 		opc = self.query("*OPC?")
 		print("opc ", opc)
 
-		self.write("TRIG:SING")
+		self.write(":TRIG:SING")
 		# there is a wait here until anritsu has finished collecting
-		err = self.query("SYST:ERR?")
+		sleep(10e-3)
+		opc = self.query("*OPC?")
+		print("opc ", opc)
+		err = self.query(":SYST:ERR?")
 		print("err ", err)
 
 
@@ -169,67 +173,77 @@ class anritsu():
 		""" frequency settings """
 		start = start*1.0e9
 		stop = stop*1.0e9
-		self.write("SENS:FREQ:STAR %d" % start)
-		self.write("SENS:FREQ:STOP %d" % stop)
+		self.write(":SENS:FREQ:STAR %d" % start)
+		self.write(":SENS:FREQ:STOP %d" % stop)
 
 
 
 	def setBandwidth(self,bandwidth):
 		self.bandwidth = bandwidth
-		self.write("SENS:BAND %6d" % bandwidth)				# IFBW Frequency (Hz)
+		self.write(":SENS:BAND %6d" % bandwidth)				# IFBW Frequency (Hz)
 
 
 
 	def setNumPoints(self,num):
-		self.write("SENS:SWEEP:POINT %4d" % max(2, num))	# Minimum number of point is 2
+		self.write(":SENS:SWEEP:POINT %4d" % max(2, num))	# Minimum number of point is 2
 
 
 
 	def doCalibration(self):
+		self.write(":SENS:CORR:COLL:PORT1:CONN CFKT")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT2:CONN CFKT")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
+
+		print(self.query(":SENS:CORR:COLL:PORT1:CONN?"))
 		print("[PORT1]")
 		print("\tSHORT")
 		input("\tConnect SHORT and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT1:SHORt")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT1:SHORt")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 		print("\tOPEN")
 		input("\tConnect OPEN and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT1:OPEN")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT1:OPEN")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 		print("\tLOAD")
 		input("\tConnect LOAD and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT1:LOAD")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT1:LOAD")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 
 		print("[PORT2]")
 		print("\tSHORT")
 		input("\tConnect SHORT and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT2:SHORt")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT2:SHORt")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 		print("\tOPEN")
 		input("\tConnect OPEN and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT2:OPEN")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT2:OPEN")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 		print("\tLOAD")
 		input("\tConnect LOAD and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT2:LOAD")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT2:LOAD")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 		
 		print("[PORT12]")
 		print("\tTHRU")
 		input("\tConnect THRU and Press Enter")
 		input("\tAre you sure to proceed?")
-		self.write("SENS:CORR:COLL:PORT12:THRU")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		self.write(":SENS:CORR:COLL:PORT12:THRU")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 		
 		print("<Calibration Complete>")
 		self.write(":SENSe:CORRection:COLLect:SAVE")
-		print(self.query("SYST:ERR?"))				#returns "No Error"
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
+		self.write(":SENSe:CORRection:ISOLation:STATe ON")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
+		self.write(":SENSe:CORRection:STATe ON")
+		print(self.query(":SYST:ERR?"))				#returns "No Error"
 
 
 
